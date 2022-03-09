@@ -4,7 +4,7 @@ Created on 09.03.2022
 @author: Michael Krieger
 """
 
-# Ein paar benötigte Bibliotheken einbinden
+# Ein paar benÃ¶tigte Bibliotheken einbinden
 import xml.etree.ElementTree as ET # xml-Verarbeitung
 import base64 # base64-Codierung
 import json # json-Verarbeitung
@@ -14,13 +14,14 @@ import getpass # Passwortabfrage
    
 # Funktion zur Abfrage von Spreadsheet-Daten aus openBIS Experimental-Step-Objekten
 # Parameter: identifier = openBIS-Identifier des openBIS Experimental-Step-Objekts
-# Rückgabe:  NumPy-Array mit den Tabellendaten (spaltenweise)
+# RÃ¼ckgabe:  NumPy-Array mit den Tabellendaten (spaltenweise)
 def openBISLoadSpreadsheetData(identifier):
 
     # Hilfsfunktion um string in float umzuwandeln und, falls das nicht geht, in None
+    # dabei wird ein Dezimalkomma ggf. in einen Dezimalpunkt umgewandelt
     def toFloat(value):
         try:
-            return float(value)
+            return float(value.replace(",","."))
         except ValueError:
             return None
     
@@ -32,6 +33,7 @@ def openBISLoadSpreadsheetData(identifier):
         spreadsheetXml=experimentalStep.props['experimental_step.spreadsheet']
         spreadsheetEncoded=ET.fromstring(spreadsheetXml).text
         spreadsheet=base64.b64decode(spreadsheetEncoded)
+        spreadsheet=spreadsheet.decode('unicode_escape')
         dataStr=json.loads(spreadsheet)['data']
         # Zelleninhalte in float bzw. None umwandeln
         data=np.array([[toFloat(j) for j in i] for i in dataStr])
@@ -39,7 +41,7 @@ def openBISLoadSpreadsheetData(identifier):
         data=np.transpose(data[~np.all(data==None,axis=1)])
         data=data[~np.all(data==None,axis=1)]
     except:
-        # irgendetwas lief schief; wir geben dann None zurück
+        # irgendetwas lief schief; wir geben dann None zurÃ¼ck
         data=None
     return data;
     
