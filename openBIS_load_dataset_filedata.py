@@ -13,7 +13,8 @@ from io import StringIO # Heruntergeladene Daten als Datei für numpy.loadtxt zu
 
 # Funktion zum Laden von Dateien aus openBIS Dataset-Objekten
 # Parameter: permId = openBIS-PermId
-#            filename = Dateiname der Datendatei im openBIS Dataset-Objekt (inkl. Dateiendung)
+#            filename = Dateiname der Datendatei im openBIS Dataset-Objekt (inkl. Dateiendung und ggf. Unterverzeichnis)
+#                       Beispiele: superdaten.txt, nur_das_beste/superdaten.txt
 # Rückgabe:  StringIO Dateiobjekt (virtuelles Dateiobjekt, das z. B. in numpy.loadtxt verwendet werden kann)
 def openBISGetDatasetFileIO(permId,filename):
     global o;
@@ -21,7 +22,10 @@ def openBISGetDatasetFileIO(permId,filename):
         # dataset von openBIS laden
         ds=o.get_dataset(permId)
         # Dateiinhalt vom openBIS Datastore Server herunterladen
-        url=ds.file_links['original/DEFAULT/'+filename]
+        if (filename.find('/')>=0):
+            url=ds.file_links['original/'+filename]
+        else:
+            url=ds.file_links['original/DEFAULT/'+filename]
         filedata=urlopen(url).read()
         filedata=filedata.decode('utf-8') # Bytedaten dekodieren (utf-8 wird angenommen)
         fileIO=StringIO(filedata) # StringIO generiert ein virtuelles Dateiobjekt mit dem Inhalt filedata
