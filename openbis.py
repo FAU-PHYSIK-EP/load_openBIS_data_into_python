@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on 29.03.2022
+Created on 29.03.2022, update on 14.10.2022
 @author: Michael Krieger
 """
 
@@ -14,31 +14,33 @@ import getpass # Passwortabfrage
 from urllib.request import urlopen # Datei-Download
 from io import StringIO # Heruntergeladene Daten als Datei für numpy.loadtxt zur Verfügung stellen
 
+openbisSession=None
+
 def login(url,username=None,password=None):
 # Anmelden bei openBIS
 # Parameter: url = Serveradresse
 #            username = Benutzername (wenn nicht explizit übergeben, dann erfolgt eine Eingabeaufforderung)
 #            password = Passwort (wenn nicht explizit übergeben, dann erfolgt eine Eingabeaufforderung)
-# Rückgabe:  openBIS-Session (oder None, falls Login nicht erfolgreich)
+    global openbisSession
     print('Login to openBIS: '+url)
     if (username is None):
         username=input('Username: ') # Benutzername abfragen
     if (password is None):
         password=getpass.getpass('Password: ') # Passwort abfragen
-    o=Openbis(url)
-    o.login(username,password,save_token=True)
+    openbisSession=Openbis(url)
+    openbisSession.login(username,password,save_token=True)
     password=None
-    if (o.is_session_active()):
+    if (openbisSession.is_session_active()):
         print("Login successful")
     else:
         print("Login failed")
-        o=None
-    return o
+        openbisSession=None
     
-def logout(openbisSession):
+def logout():
+    global openbisSession
     openbisSession.logout()
 
-def getDatasetFileIO(openbisSession,permId,filename,decode='utf-8'):
+def getDatasetFileIO(permId,filename,decode='utf-8'):
 # Funktion zum Laden von Dateien aus openBIS Dataset-Objekten
 # Parameter: openbisSession = aktuelle Session (Rückgabe von login)
 #            permId = openBIS-PermId
@@ -47,6 +49,7 @@ def getDatasetFileIO(openbisSession,permId,filename,decode='utf-8'):
 #                       Es wird die erste Datei geladen, die auf filename endet
 #            decode = Kodierung des Dateiinhalts (optional, Standard: utf-8)
 # Rückgabe:  StringIO Dateiobjekt (virtuelles Dateiobjekt, das z. B. in numpy.loadtxt verwendet werden kann)
+    global openbisSession
     try:
         # dataset von openBIS laden
         ds=openbisSession.get_dataset(permId)
@@ -71,9 +74,9 @@ def getDatasetFileIO(openbisSession,permId,filename,decode='utf-8'):
         fileIO=None
     return fileIO
    
-def getSpreadsheetData(openbisSession,identifier):
+def getSpreadsheetData(permId):
 # Funktion zur Abfrage von Spreadsheet-Daten aus openBIS Experimental-Step-Objekten
-# Parameter: identifier = openBIS-Identifier des openBIS Experimental-Step-Objekts
+# Parameter: permId = openBIS-PermId des openBIS Experimental-Step-Objekts
 # Rückgabe:  NumPy-Array mit den Tabellendaten (spaltenweise)
 
     # Hilfsfunktion um string in float umzuwandeln und, falls das nicht geht, in None
@@ -84,9 +87,10 @@ def getSpreadsheetData(openbisSession,identifier):
         except ValueError:
             return None
     
+    global openbisSession
     try:
         # Objekt laden (Experimental Step)
-        experimentalStep=openbisSession.get_object(identifier)
+        experimentalStep=openbisSession.get_object(permId)
         # Spreadsheet-Daten extrahieren
         spreadsheetXml=experimentalStep.props['experimental_step.spreadsheet']
         spreadsheetEncoded=ET.fromstring(spreadsheetXml).text
