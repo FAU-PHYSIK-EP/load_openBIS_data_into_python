@@ -14,31 +14,32 @@ import getpass # Passwortabfrage
 from urllib.request import urlopen # Datei-Download
 from io import StringIO # Heruntergeladene Daten als Datei für numpy.loadtxt zur Verfügung stellen
 
-openbisSession=None
+openbisSessionID=None
 
 def login(url,username=None,password=None):
 # Anmelden bei openBIS
 # Parameter: url = Serveradresse
 #            username = Benutzername (wenn nicht explizit übergeben, dann erfolgt eine Eingabeaufforderung)
 #            password = Passwort (wenn nicht explizit übergeben, dann erfolgt eine Eingabeaufforderung)
-    global openbisSession
+# Rückgabe:  openBIS-Session (oder None, falls Login nicht erfolgreich)
+    global openbisSessionID
     print('Login to openBIS: '+url)
     if (username is None):
         username=input('Username: ') # Benutzername abfragen
     if (password is None):
         password=getpass.getpass('Password: ') # Passwort abfragen
-    openbisSession=Openbis(url)
-    openbisSession.login(username,password,save_token=True)
+    openbisSessionID=Openbis(url)
+    openbisSessionID.login(username,password,save_token=False)
     password=None
-    if (openbisSession.is_session_active()):
+    if (openbisSessionID.is_session_active()):
         print("Login successful")
     else:
         print("Login failed")
-        openbisSession=None
+        openbisSessionID=None
     
 def logout():
-    global openbisSession
-    openbisSession.logout()
+    global openbisSessionID
+    openbisSessionID.logout()
 
 def getDatasetFileIO(permId,filename,decode='utf-8'):
 # Funktion zum Laden von Dateien aus openBIS Dataset-Objekten
@@ -49,10 +50,10 @@ def getDatasetFileIO(permId,filename,decode='utf-8'):
 #                       Es wird die erste Datei geladen, die auf filename endet
 #            decode = Kodierung des Dateiinhalts (optional, Standard: utf-8)
 # Rückgabe:  StringIO Dateiobjekt (virtuelles Dateiobjekt, das z. B. in numpy.loadtxt verwendet werden kann)
-    global openbisSession
+    global openbisSessionID
     try:
         # dataset von openBIS laden
-        ds=openbisSession.get_dataset(permId)
+        ds=openbisSessionID.get_dataset(permId)
         # url zur Datei rausfinden
         fileLinks=ds.file_links
         url=''
@@ -73,10 +74,34 @@ def getDatasetFileIO(permId,filename,decode='utf-8'):
         # irgendetwas lief schief; wir geben dann None zurück
         fileIO=None
     return fileIO
+
+def getDatasetData(permId,filename,decode='utf-8',skiprows=0,usecols=None):
+# Funktion zum Laden von Daten aus openBIS Dataset-Objekten via numpy.loadtxt
+# Parameter: openbisSession = aktuelle Session (Rückgabe von login)
+#            permId = openBIS-PermId
+#            filename = Dateiname der Datendatei im openBIS Dataset-Objekt (inkl. Dateiendung und ggf. Unterverzeichnis)
+#                       Beispiele: superdaten.txt, nur_das_beste/superdaten.txt
+#                       Es wird die erste Datei geladen, die auf filename endet
+#            decode = Kodierung des Dateiinhalts (optional, Standard: utf-8)
+#            skiprows = Anzahl Zeilen in Datei überspringen (siehe numpy.loadtxt)
+#            usecols = Liste mit zu berücksichtigen Spalten (siehe numpy.loadtxt)
+# Rückgabe:  NumPy-Array mit den Daten
+    global openbisSessionID
+    try:
+        # fileio von openBIS laden
+        fileio=getDatasetFileIO(permId,filename,decode)
+        # Daten laden
+        data=np.loadtxt(fileio,skiprows=skiprows,usecols=usecols)
+    except:
+        # irgendetwas lief schief; wir geben dann None zurück
+        data=None
+    return data
    
-def getSpreadsheetData(permId):
+def getSpreadsheetData(permId,skiprows=0,usecols=None):
 # Funktion zur Abfrage von Spreadsheet-Daten aus openBIS Experimental-Step-Objekten
 # Parameter: permId = openBIS-PermId des openBIS Experimental-Step-Objekts
+#            skiprows = Anzahl Zeilen der Tabelle überspringen
+#            usecols = Liste mit zu berücksichtigen Spalten
 # Rückgabe:  NumPy-Array mit den Tabellendaten (spaltenweise)
 
     # Hilfsfunktion um string in float umzuwandeln und, falls das nicht geht, in None
@@ -87,10 +112,10 @@ def getSpreadsheetData(permId):
         except ValueError:
             return None
     
-    global openbisSession
+    global openbisSessionID
     try:
         # Objekt laden (Experimental Step)
-        experimentalStep=openbisSession.get_object(permId)
+        experimentalStep=openbisSessionID.get_object(permId)
         # Spreadsheet-Daten extrahieren
         spreadsheetXml=experimentalStep.props['experimental_step.spreadsheet']
         spreadsheetEncoded=ET.fromstring(spreadsheetXml).text
@@ -99,9 +124,17 @@ def getSpreadsheetData(permId):
         dataStr=json.loads(spreadsheet)['data']
         # Zelleninhalte in float bzw. None umwandeln
         data=np.array([[toFloat(j) for j in i] for i in dataStr])
-        # Leere Zeilen und Spalten entfernen
+        # skiprows und leere Zeilen und Spalten entfernen
+        data=data[skiprows:]
         data=np.transpose(data[~np.all(data==None,axis=1)])
         data=data[~np.all(data==None,axis=1)]
+        if (usecols is not None):
+            # wenn usecols angegeben ist, dann diese Spalten extrahieren
+            data=np.transpose(data[usecols])
+            data=np.transpose(data[~np.all(data==None,axis=1)])
+            # bei Verwendung von usecols gehen wir davon aus, dass keine None mehr in den
+            # Daten sind und legen den Typ auf float fest (hilft z. B. für numpy.polyfit)
+            data=np.array(data,dtype=float)
     except:
         # irgendetwas lief schief; wir geben dann None zurück
         data=None
